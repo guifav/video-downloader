@@ -1,0 +1,221 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Baixar vídeo</title>
+<meta name="robots" content="noindex, nofollow">
+<style>
+	:root {
+		color-scheme: light dark;
+		--bg: #ffffff; --fg: #0a0a0a; --muted: #737373; --border: #e5e5e5; --card: #fafafa;
+		--primary: #171717; --primary-fg: #fafafa; --danger: #dc2626; --ok: #16a34a; --warn: #b45309;
+	}
+	@media (prefers-color-scheme: dark) {
+		:root { --bg: #0a0a0a; --fg: #fafafa; --muted: #a3a3a3; --border: #262626; --card: #141414;
+			--primary: #fafafa; --primary-fg: #171717; --danger: #f87171; --ok: #4ade80; --warn: #fbbf24; }
+	}
+	* { box-sizing: border-box; }
+	body { margin: 0; background: var(--bg); color: var(--fg);
+		font: 15px/1.5 ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif; }
+	main { max-width: 640px; margin: 0 auto; padding: 48px 20px; }
+	h1 { font-size: 20px; font-weight: 600; margin: 0 0 4px; }
+	p.sub { margin: 0 0 24px; color: var(--muted); font-size: 14px; }
+	form { display: flex; gap: 8px; }
+	input { flex: 1; min-width: 0; height: 40px; padding: 0 12px; border: 1px solid var(--border);
+		border-radius: 8px; background: var(--bg); color: var(--fg); font: inherit; }
+	input:focus { outline: 2px solid var(--primary); outline-offset: 1px; }
+	button, a.btn { height: 40px; padding: 0 16px; border: 0; border-radius: 8px; background: var(--primary);
+		color: var(--primary-fg); font: inherit; font-weight: 500; cursor: pointer; text-decoration: none;
+		display: inline-flex; align-items: center; white-space: nowrap; }
+	button:disabled { opacity: .5; cursor: default; }
+	#form-error { color: var(--danger); font-size: 14px; min-height: 21px; margin: 8px 0 0; }
+	ul { list-style: none; padding: 0; margin: 16px 0 0; display: grid; gap: 8px; }
+	li { border: 1px solid var(--border); background: var(--card); border-radius: 10px; padding: 12px 14px;
+		display: grid; grid-template-columns: 1fr auto; gap: 4px 12px; align-items: center; }
+	.title { font-weight: 500; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+	.meta { grid-column: 1; color: var(--muted); font-size: 13px; overflow-wrap: anywhere; }
+	.status-failed .meta.status { color: var(--danger); }
+	.status-done .meta.status { color: var(--ok); }
+	.meta.warning { color: var(--warn); }
+	.action { grid-row: 1 / span 3; grid-column: 2; }
+</style>
+</head>
+<body>
+<main>
+	<h1>Baixar vídeo</h1>
+	<p class="sub">YouTube, X, Instagram ou Facebook. Só vídeos avulsos, até 1080p. Os arquivos ficam disponíveis por 24 horas, também em outros aparelhos.</p>
+	<form id="form" autocomplete="off">
+		<input id="url" name="url" type="text" inputmode="url" placeholder="Cole o link do vídeo" autofocus required>
+		<button id="submit" type="submit">Baixar</button>
+	</form>
+	<p id="form-error" role="alert"></p>
+	<ul id="jobs" aria-live="polite"></ul>
+</main>
+<script>
+"use strict";
+const POLL_MS = 2000;
+const MAX_POLL_BACKOFF_MS = 30000;
+const GIVE_UP_MS = 60 * 60 * 1000;
+const LABELS = { queued: "Na fila", running: "Baixando", done: "Pronto", failed: "Falhou", expired: "Expirado" };
+const PLATFORMS = { youtube: "YouTube", x: "X", instagram: "Instagram", facebook: "Facebook" };
+const form = document.getElementById("form");
+const input = document.getElementById("url");
+const submit = document.getElementById("submit");
+const formError = document.getElementById("form-error");
+const list = document.getElementById("jobs");
+// Estado por job: o envio explicito promove autoDownload mesmo se o restore chegou antes.
+const tracked = new Map();
+
+class SessionExpired extends Error {}
+class NotFound extends Error {}
+
+function formatBytes(n) {
+	if (typeof n !== "number") return "";
+	const units = ["B", "KB", "MB", "GB"];
+	let i = 0;
+	while (n >= 1024 && i < units.length - 1) { n /= 1024; i++; }
+	return `${n.toFixed(i === 0 ? 0 : 1).replace(".", ",")} ${units[i]}`;
+}
+
+async function api(path, options) {
+	const res = await fetch(path, { ...options, credentials: "same-origin", redirect: "manual" });
+	if (res.type === "opaqueredirect" || res.status === 401) {
+		throw new SessionExpired("Sessão expirada. Recarregue a página para entrar de novo.");
+	}
+	if (res.status === 403) {
+		// Chaves do Access indisponiveis: falha transitoria, a UI tenta de novo (U2). Decide pelo
+		// header, que chega antes do corpo, para nao depender de ler o corpo inteiro.
+		if (res.headers.get("x-access-denial") === "unavailable") {
+			res.body?.cancel().catch(() => {});
+			throw new Error("Verificação de acesso indisponível; tentando de novo.");
+		}
+		throw new SessionExpired("Sessão expirada. Recarregue a página para entrar de novo.");
+	}
+	let body = null;
+	try {
+		body = await res.json();
+	} catch {
+		// Corpo cortado ou invalido: em resposta de sucesso e falha de rede (retentavel), nunca um job vazio.
+		if (res.ok) throw new Error("resposta incompleta do servidor");
+	}
+	if (res.status === 404) throw new NotFound((body && body.error) || "Não encontrado.");
+	if (!res.ok) throw new Error((body && body.error) || `Erro HTTP ${res.status}`);
+	if (body === null || typeof body !== "object") throw new Error("resposta inesperada do servidor");
+	return body;
+}
+
+function render(li, job, note) {
+	li.className = `status-${job.status}`;
+	li.replaceChildren();
+	const title = document.createElement("div");
+	title.className = "title";
+	title.textContent = job.title || job.url;
+	title.title = job.url;
+	const meta = document.createElement("div");
+	meta.className = "meta";
+	// Resolucao entregue: pode ficar abaixo de 1080p quando o video nao tem H.264 maior (follow-up #5).
+	meta.textContent = [PLATFORMS[job.platform] || job.platform, formatBytes(job.bytes), job.resolution].filter(Boolean).join(" · ");
+	const status = document.createElement("div");
+	status.className = "meta status";
+	let text = LABELS[job.status] || job.status;
+	if (job.status === "running" || job.status === "queued") {
+		text += ` · ${Math.max(0, Math.round((Date.now() - job.createdAt) / 1000))} s`;
+	}
+	if (job.status === "failed" && job.error) text += `: ${job.error}`;
+	if (note) text += ` · ${note}`;
+	status.textContent = text;
+	li.append(title, meta, status);
+	if (job.status === "done" && job.warning) {
+		// Arquivo fora do padrao H.264 (conversao nao coube no prazo): avisa antes de salvar.
+		const warning = document.createElement("div");
+		warning.className = "meta warning";
+		warning.textContent = job.warning;
+		li.append(warning);
+	}
+	if (job.status === "done" && job.fileUrl) {
+		const a = document.createElement("a");
+		a.className = "btn action";
+		a.href = job.fileUrl;
+		a.textContent = "Salvar";
+		li.append(a);
+	}
+}
+
+// Acompanha um job ate o fim. Erro de rede (aba suspensa, notebook que dormiu, rede que piscou)
+// nao encerra: mantem o ultimo estado e tenta de novo com espera crescente. So para em 404
+// (job sumiu), sessao expirada ou depois de 60 min.
+async function track(job, { autoDownload }) {
+	const existing = tracked.get(job.id);
+	if (existing) {
+		if (autoDownload && !existing.autoDownload) {
+			existing.autoDownload = true;
+			list.prepend(existing.li);
+			// Restore ja levou o job ate o fim antes da resposta do envio: baixa agora.
+			if (existing.finished) existing.li.querySelector("a")?.click();
+		}
+		return;
+	}
+	const li = document.createElement("li");
+	const entry = { li, autoDownload, finished: false };
+	tracked.set(job.id, entry);
+	list.append(li);
+	if (autoDownload) list.prepend(li);
+	render(li, job);
+	let wait = POLL_MS;
+	while (job.status === "queued" || job.status === "running") {
+		if (Date.now() - job.createdAt > GIVE_UP_MS) {
+			render(li, { ...job, status: "failed", error: "sem resposta há mais de 1 hora; reenvie o link" });
+			return;
+		}
+		await new Promise((r) => setTimeout(r, wait));
+		try {
+			job = await api(`/api/jobs/${job.id}`);
+			wait = POLL_MS;
+			render(li, job);
+		} catch (error) {
+			if (error instanceof SessionExpired || error instanceof NotFound) {
+				render(li, { ...job, status: "failed", error: error.message });
+				return;
+			}
+			wait = Math.min(wait * 2, MAX_POLL_BACKOFF_MS);
+			render(li, job, "reconectando");
+		}
+	}
+	entry.finished = job.status === "done" && Boolean(job.fileUrl);
+	if (entry.autoDownload && entry.finished) li.querySelector("a")?.click();
+}
+
+async function restore() {
+	try {
+		const { jobs } = await api("/api/jobs");
+		for (const job of jobs) track(job, { autoDownload: false });
+	} catch (error) {
+		if (error instanceof SessionExpired) formError.textContent = error.message;
+	}
+}
+
+form.addEventListener("submit", async (event) => {
+	event.preventDefault();
+	formError.textContent = "";
+	submit.disabled = true;
+	try {
+		const job = await api("/api/jobs", {
+			method: "POST",
+			headers: { "content-type": "application/json" },
+			body: JSON.stringify({ url: input.value }),
+		});
+		input.value = "";
+		track(job, { autoDownload: true });
+	} catch (error) {
+		formError.textContent = error.message;
+	} finally {
+		submit.disabled = false;
+		input.focus();
+	}
+});
+
+restore();
+</script>
+</body>
+</html>

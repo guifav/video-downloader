@@ -1,0 +1,45 @@
+name: ci
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+# Actions fixadas por SHA (tag so no comentario): uma tag movida nao muda o que roda aqui.
+# O yt-dlp do job container, ao contrario, e sempre o mais novo, de proposito: o job testa a
+# propria imagem de producao (Dockerfile, ADD do metadado do PyPI).
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  worker:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+      - run: npm run typecheck
+      - run: npm test
+
+  container:
+    # Os testes do container rodam dentro da imagem de producao (Dockerfile): mesmo ffmpeg, mesmo
+    # Python e o yt-dlp atual, e sem depender do apt do runner (o mirror do Ubuntu travou em
+    # 2026-11-11 e derrubou o job por timeout).
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+      - name: imagem de producao
+        run: docker build -t video-download-ci .
+      - name: unittest na imagem de producao
+        run: >-
+          docker run --rm -e PYTHONDONTWRITEBYTECODE=1 -v "$PWD/container:/t:ro" -w /t
+          video-download-ci python -m unittest test_app -v

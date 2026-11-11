@@ -1,0 +1,36 @@
+name: Bug report
+description: Something does not work as expected
+labels: [bug]
+body:
+  - type: dropdown
+    id: platform
+    attributes:
+      label: Platform
+      options: [YouTube, X, Instagram, Facebook, Other / not platform specific]
+    validations:
+      required: true
+  - type: input
+    id: link-type
+    attributes:
+      label: Link type
+      description: The kind of link, for example "YouTube Short", "Instagram reel" or "Facebook share/v link". A public example link helps, if you can share one.
+    validations:
+      required: true
+  - type: textarea
+    id: what-happened
+    attributes:
+      label: What happened
+      description: What you expected, what you got, and the exact error message shown in the UI.
+    validations:
+      required: true
+  - type: textarea
+    id: logs
+    attributes:
+      label: Logs (optional)
+      description: Relevant lines from `npx wrangler tail`. Remove emails, tokens and cookies first.
+      render: text
+  - type: input
+    id: version
+    attributes:
+      label: Commit
+      description: The commit your instance is running (`git rev-parse --short HEAD`).

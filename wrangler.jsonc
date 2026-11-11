@@ -1,0 +1,52 @@
+{
+	"$schema": "node_modules/wrangler/config-schema.json",
+	"name": "video-downloader",
+	"main": "src/index.ts",
+	"compatibility_date": "2025-10-08",
+	"compatibility_flags": ["nodejs_compat"],
+	"workers_dev": false,
+	"preview_urls": false,
+	// Your hostname, on a zone of your Cloudflare account. It must be protected by Cloudflare Access
+	// (see docs/DEPLOY.md): the Worker rejects every request without a valid Access JWT.
+	"routes": [{ "pattern": "video.example.com", "custom_domain": true }],
+	"observability": { "enabled": true },
+	"assets": {
+		"directory": "./public",
+		"binding": "ASSETS",
+		"run_worker_first": true
+	},
+	"vars": {
+		// Cloudflare Access: your team domain, the application AUD tag and the emails allowed in
+		// (comma separated). Not secrets: the JWT is checked against Access public keys.
+		"ACCESS_TEAM_DOMAIN": "your-team.cloudflareaccess.com",
+		"ACCESS_AUD": "replace-with-your-access-application-aud-tag",
+		"ACCESS_ALLOWED_EMAILS": "you@example.com",
+		// Optional weekly smoke report by email (needs Email Routing on the sender's zone and a
+		// verified destination). Leave empty to only log the report.
+		"ALERT_EMAIL_FROM": "",
+		"ALERT_EMAIL_TO": ""
+	},
+	"containers": [
+		{
+			"class_name": "JobContainer",
+			"scheduling_policy": "durable_object",
+			"images": { "base": { "dockerfile": "./Dockerfile" } }
+		}
+	],
+	"durable_objects": {
+		"bindings": [
+			{ "class_name": "JobContainer", "name": "JOBS" },
+			{ "class_name": "JobIndex", "name": "JOB_INDEX" }
+		]
+	},
+	"exports": {
+		"JobContainer": { "type": "durable-object", "storage": "sqlite" },
+		"JobIndex": { "type": "durable-object", "storage": "sqlite" }
+	},
+	"r2_buckets": [{ "binding": "FILES", "bucket_name": "video-downloader-files" }],
+	// Weekly smoke test (src/smoke.ts): start and check, Mondays 12:00 and 12:50 UTC. In Cloudflare
+	// cron numeric day 1 is Sunday, so use the day name. Remove both to disable (6 jobs a week).
+	"triggers": { "crons": ["0 12 * * MON", "50 12 * * MON"] },
+	// Binding used only by the smoke report (see ALERT_EMAIL_* above).
+	"send_email": [{ "name": "ALERT_EMAIL" }]
+}

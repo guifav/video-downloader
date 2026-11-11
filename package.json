@@ -1,0 +1,21 @@
+{
+	"name": "video-downloader",
+	"description": "Self-hosted single-video downloader for YouTube, X, Instagram and Facebook on Cloudflare Workers, Containers and R2",
+	"license": "MIT",
+	"repository": "github:guifav/video-downloader",
+	"private": true,
+	"type": "module",
+	"scripts": {
+		"cf-typegen": "wrangler types --strict-vars=false",
+		"check": "tsc --noEmit -p tsconfig.test.json && vitest run && wrangler deploy --dry-run",
+		"deploy": "wrangler deploy",
+		"test": "vitest run",
+		"test:py": "cd container && python3 -m unittest test_app",
+		"typecheck": "tsc --noEmit -p tsconfig.test.json"
+	},
+	"devDependencies": {
+		"typescript": "5.9.3",
+		"wrangler": "4.136.1",
+		"vitest": "4.1.10"
+	}
+}
