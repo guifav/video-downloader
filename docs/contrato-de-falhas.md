@@ -9,12 +9,12 @@ reenvio do job. Nunca pode custar segurança, arquivo corrompido ou gasto sem te
 
 ## Invariantes (violação bloqueia)
 
-- I1 Entrada e rede: só URL canônica de vídeo avulso do YouTube, do X, do Instagram ou do
-  Facebook chega ao container; só o extrator da plataforma roda; as conexões do yt-dlp só saem
+- I1 Entrada e rede: só URL canônica de vídeo avulso do YouTube, do X, do Instagram, do
+  Facebook ou do TikTok chega ao container; só o extrator da plataforma roda; as conexões do yt-dlp só saem
   para endereço público. Além da busca fixa das chaves do Access (`src/access.ts`, URL montada da configuração), a única
   requisição que o Worker faz a partir de entrada do usuário resolve links de compartilhamento do
-  Facebook (`src/share.ts`): cada salto é reconstruído a partir do token em
-  `www.facebook.com`, no máximo 3 saltos com 8 s cada, e o destino final passa pelo mesmo parser
+  Facebook e links curtos do TikTok (`src/share.ts`): cada salto é reconstruído a partir do token,
+  em `www.facebook.com`, `vm.tiktok.com`, `vt.tiktok.com` ou `www.tiktok.com/t/`, no máximo 3 saltos com 8 s cada, e o destino final passa pelo mesmo parser
   das URLs diretas. Nenhuma URL vinda de `Location` é buscada como veio.
 - I2 Exposição: o Worker não responde fora do Cloudflare Access. `workers_dev` e
   `preview_urls` ficam desligados, e a única rota passa pela validação do JWT, que falha fechada.

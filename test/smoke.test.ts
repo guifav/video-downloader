@@ -63,10 +63,10 @@ const one = (name: string, expect: "done" | "failed" = "done"): SmokeCase => ({
 });
 
 describe("casos do smoke", () => {
-	it("cobrem as quatro plataformas, o link do app do Facebook, a conversao longa e um post sem video", () => {
+	it("cobrem as cinco plataformas, o link do app do Facebook e do TikTok, a conversao longa e um post sem video", () => {
 		const names = SMOKE_CASES.map((c) => c.name);
 		expect(new Set(names).size).toBe(names.length);
-		expect(new Set(SMOKE_CASES.map((c) => c.platform))).toEqual(new Set(["youtube", "x", "instagram", "facebook"]));
+		expect(new Set(SMOKE_CASES.map((c) => c.platform))).toEqual(new Set(["youtube", "x", "instagram", "facebook", "tiktok"]));
 		expect(SMOKE_CASES.some((c) => c.url.includes("facebook.com/share/"))).toBe(true);
 		const negative = SMOKE_CASES.filter((c) => c.expect === "failed");
 		expect(negative).toHaveLength(1);

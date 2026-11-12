@@ -1,6 +1,6 @@
 """Servidor do container: baixa um video avulso com yt-dlp e devolve o arquivo no corpo.
 
-POST /download {"url": str, "platform": "youtube"|"x"|"instagram"|"facebook", "budget_ms": int}
+POST /download {"url": str, "platform": "youtube"|"x"|"instagram"|"facebook"|"tiktok", "budget_ms": int}
   200 -> corpo = arquivo; headers Content-Length, X-Title (percent-encoded), X-Ext, e quando o
          ffprobe rodou X-Source-Codec (codec de video baixado, antes da conversao) e X-Video-Size
          (LxA do arquivo entregue); se o arquivo nao saiu H.264, X-Warning (percent-encoded)
@@ -53,6 +53,7 @@ ALLOWED_HOSTS = {
     "x": {"x.com"},
     "instagram": {"www.instagram.com"},
     "facebook": {"www.facebook.com"},
+    "tiktok": {"www.tiktok.com"},
 }
 
 # So o extrator da plataforma pode rodar. Sem isso, um post do X sem video que aponta para
@@ -64,6 +65,8 @@ ALLOWED_EXTRACTORS = {
     "x": ["twitter"],
     "instagram": ["instagram"],
     "facebook": ["facebook", "facebook:reel"],
+    # So o extrator de video: tiktok:user/live/collection ficam fora. Link curto chega ja resolvido.
+    "tiktok": ["tiktok"],
 }
 
 # Cookies opcionais de conta descartavel, um secret por plataforma. Nunca a conta pessoal.
@@ -71,9 +74,11 @@ COOKIE_SECRETS = {
     "youtube": "YT_COOKIES_B64",
     "instagram": "IG_COOKIES_B64",
     "facebook": "FB_COOKIES_B64",
+    "tiktok": "TT_COOKIES_B64",
 }
 
-# H.264 + AAC primeiro: VP9/AV1/Opus dentro de mp4 nao tocam no QuickTime/Safari.
+# H.264 + AAC primeiro: VP9/AV1/Opus dentro de mp4 nao tocam no QuickTime/Safari. O yt-dlp
+# rotula H.264 como "avc1..." (YouTube, X) ou "h264" (TikTok, que tambem oferece h265 ao lado).
 # Depois cai para o melhor disponivel. Todas as alternativas respeitam o teto de 1080p pelo
 # LADO MENOR: video vertical ou quase quadrado (aspect_ratio <= 1, que o yt-dlp arredonda em 2
 # casas: 1080x1084 vira 1.0) e limitado pela largura, o resto pela altura.
@@ -86,8 +91,8 @@ _CAPPED = f"[height<=?{MAX_SIDE}]"
 FORMAT = "/".join(
     f"{alt.format(cap=cap)}"
     for alt in (
-        "bv*[vcodec^=avc1]{cap}+ba[acodec^=mp4a]",
-        "b[vcodec^=avc1]{cap}",
+        "bv*[vcodec~='^(avc1|h264)']{cap}+ba[acodec^=mp4a]",
+        "b[vcodec~='^(avc1|h264)']{cap}",
         "bv*{cap}+ba",
         "b{cap}",
     )

@@ -46,10 +46,10 @@ If you deploy from your own fork or clone and want to keep your values out of gi
 
 ## 5. Add cookies (optional)
 
-At the time of writing, public videos from YouTube, X, Instagram and Facebook downloaded fine from Cloudflare's network without cookies. If a platform starts blocking, add cookies as a base64-encoded Netscape cookies file. Always take them from a **throwaway account, never your personal one**.
+At the time of writing, public videos from YouTube, X, Instagram, Facebook and TikTok downloaded fine from Cloudflare's network without cookies. If a platform starts blocking, add cookies as a base64-encoded Netscape cookies file. Always take them from a **throwaway account, never your personal one**.
 
 ```sh
-base64 -w0 cookies.txt | npx wrangler secret put YT_COOKIES_B64   # also IG_COOKIES_B64, FB_COOKIES_B64
+base64 -w0 cookies.txt | npx wrangler secret put YT_COOKIES_B64   # also IG_COOKIES_B64, FB_COOKIES_B64, TT_COOKIES_B64
 ```
 
 ## 6. Deploy
