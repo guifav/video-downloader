@@ -1,7 +1,7 @@
 import { DurableObject } from "cloudflare:workers";
 import { addRecent, pruneRecent, type RecentEntry } from "./recent";
 
-// Indice singleton dos jobs recentes de um usuario. Um unico usuario: uma instancia so.
+// Indice dos jobs recentes de um usuario: uma instancia por email do Access (indexName em src/api.ts).
 export class JobIndex extends DurableObject {
 	async add(entry: RecentEntry): Promise<void> {
 		const list = (await this.ctx.storage.get<RecentEntry[]>("recent")) ?? [];

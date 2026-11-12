@@ -110,4 +110,16 @@ describe("handleRequest", () => {
 		expect(res.status).toBe(403);
 		expect(calls.assets).toBe(0);
 	});
+
+	it("o email verificado pelo Access vira o dono do job e o indice do usuario", async () => {
+		const { e } = env();
+		const indexes: string[] = [];
+		let owner: string | undefined;
+		e.JOB_INDEX = { getByName: (name: string) => (indexes.push(name), { add: async () => {}, list: async () => [] }) };
+		e.JOBS = { getByName: () => ({ create: async (job) => ((owner = job.owner), job), get: async () => null }) };
+		const res = await handleRequest(req("/api/jobs", { method: "POST", body: JSON.stringify({ url: "https://youtu.be/jNQXAC9IVRw" }) }, "ok"), e, allow);
+		expect(res.status).toBe(202);
+		expect(owner).toBe("owner@example.com");
+		expect(indexes).toEqual(["recent:owner@example.com"]);
+	});
 });

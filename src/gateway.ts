@@ -40,7 +40,7 @@ export async function handleRequest(request: Request, env: GatewayEnv, verify: V
 	}
 
 	const { pathname } = new URL(request.url);
-	if (pathname.startsWith("/api/")) return handleApi(request, env);
+	if (pathname.startsWith("/api/")) return handleApi(request, env, undefined, access.email);
 	if (request.method !== "GET" && request.method !== "HEAD") return json({ error: "Metodo nao permitido." }, 405);
 	return env.ASSETS.fetch(request);
 }
