@@ -1,7 +1,7 @@
 # syntax=docker/dockerfile:1
 FROM denoland/deno:bin AS deno
 
-FROM python:3.13-slim
+FROM python:3.15-slim
 RUN apt-get update \
     && apt-get install -y --no-install-recommends ffmpeg ca-certificates \
     && rm -rf /var/lib/apt/lists/*
