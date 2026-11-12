@@ -208,6 +208,8 @@ The maintainers do not host, store or distribute any content.
 
 Built on [yt-dlp](https://github.com/yt-dlp/yt-dlp), [FFmpeg](https://ffmpeg.org/), [Deno](https://deno.com/) and [Cloudflare Workers](https://developers.cloudflare.com/workers/).
 
+Platform logos come from [Simple Icons](https://simpleicons.org/) (CC0). YouTube, X, Instagram and Facebook are trademarks of their respective owners; this project is not affiliated with or endorsed by them.
+
 ## License
 
 [MIT](LICENSE) © Guilherme Favaron
