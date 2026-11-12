@@ -3,7 +3,7 @@
 > English summary: see "Design invariants" in [CONTRIBUTING.md](../CONTRIBUTING.md). This file is the
 > original, more detailed version in Portuguese; code comments reference it.
 
-Garantia: at-least-once com reconciliação pelo R2. O sistema tem um usuário só. Falha de
+Garantia: at-least-once com reconciliação pelo R2. O sistema tem poucos usuários, cada um com a própria lista e os próprios arquivos (o dono do job é o email do Access). Falha de
 infraestrutura (storage do Durable Object, R2, container, rede) pode custar reexecução ou
 reenvio do job. Nunca pode custar segurança, arquivo corrompido ou gasto sem teto.
 

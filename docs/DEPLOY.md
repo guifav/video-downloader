@@ -25,7 +25,7 @@ If you pick another bucket name, change `r2_buckets[0].bucket_name` in `wrangler
 This step is required: the Worker refuses any request without a valid Access JWT.
 
 1. In Zero Trust, note your team domain (`<team>.cloudflareaccess.com`).
-2. Create a **self-hosted application** for your hostname, for example `video.example.com`. Give it a policy that allows only your email; the one-time PIN login method is enough.
+2. Create a **self-hosted application** for your hostname, for example `video.example.com`. Give it a policy that allows only your email (add more emails later to share it; each user sees only their own downloads); the one-time PIN login method is enough.
 3. Copy the application's **AUD tag**.
 
 ## 4. Configure `wrangler.jsonc`

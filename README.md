@@ -61,7 +61,7 @@ Playlists, channels, profiles and stories are out of scope on purpose. This tool
 | **Worker** | API and static UI. Verifies the Access JWT, allow-lists URLs and resolves Facebook share links. | `src/index.ts`, `src/api.ts`, `src/gateway.ts`, `src/access.ts`, `src/urls.ts`, `src/share.ts` |
 | **Job Durable Object** | One per job. Owns the state, drives retries with alarms, writes the file to R2 and cleans up. | `src/container.ts` (adapter), `src/engine.ts` (logic) |
 | **Container** | Python service with yt-dlp, ffmpeg and Deno. Downloads the video, converts it to H.264 when needed and streams the MP4 back. Blocks connections to private addresses. | `container/app.py`, `Dockerfile` |
-| **Job list** | Small Durable Object holding the last 25 hours of jobs, so the list survives reloads and works across devices. | `src/job-index.ts`, `src/recent.ts` |
+| **Job list** | One small Durable Object per user (keyed by the Access email) holding the last 25 hours of jobs, so the list survives reloads and works across devices. Each user only sees, and can only download, their own jobs. | `src/job-index.ts`, `src/recent.ts` |
 | **R2** | Temporary storage. Only complete files are written, as fixed-length streams. | `src/files.ts`, `src/engine.ts` |
 | **Smoke test** | Weekly cron: starts one job per platform, checks them 50 minutes later and emails the report. | `src/smoke.ts` |
 
@@ -182,7 +182,7 @@ Platforms change often, and yt-dlp usually ships a fix within days. The image in
 <details>
 <summary><b>Can I share it with friends?</b></summary>
 
-Yes: add their emails to the Access policy and to <code>ACCESS_ALLOWED_EMAILS</code>. Running it as a public service is not a goal of this project, and doing so would make you responsible for what other people download.
+Yes: add their emails to the Access policy and to <code>ACCESS_ALLOWED_EMAILS</code> (comma separated). Each person gets their own job list and can only see and download their own files. Running it as a public service is not a goal of this project, and doing so would make you responsible for what other people download.
 </details>
 
 ## Contributing
