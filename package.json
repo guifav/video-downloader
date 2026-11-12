@@ -14,8 +14,8 @@
 		"typecheck": "tsc --noEmit -p tsconfig.test.json"
 	},
 	"devDependencies": {
-		"typescript": "5.9.3",
-		"wrangler": "4.136.1",
-		"vitest": "4.1.10"
+		"typescript": "7.0.2",
+		"wrangler": "4.158.0",
+		"vitest": "5.1.0"
 	}
 }
