@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { handleApi, MAX_BODY_BYTES, type ApiEnv, type JobStub } from "../src/api";
+import { handleApi, indexName, MAX_BODY_BYTES, type ApiEnv, type JobStub } from "../src/api";
 import type { JobRecord } from "../src/job";
 
 const ID = "11111111-1111-4111-8111-111111111111";
@@ -8,17 +8,18 @@ function fakeEnv() {
 	const jobs = new Map<string, JobRecord>();
 	const files = new Map<string, { body: string; disposition: string }>();
 	const created: JobRecord[] = [];
-	let recent: { id: string; createdAt: number }[] = [];
+	// Um indice por nome, como os Durable Objects (um por usuario).
+	const indexes = new Map<string, { id: string; createdAt: number }[]>();
 	let indexFails = false;
 	const env: ApiEnv = {
 		JOB_INDEX: {
-			getByName: () => ({
+			getByName: (name: string) => ({
 				async add(entry) {
 					if (indexFails) throw new Error("indice fora");
-					recent = [entry, ...recent.filter((e) => e.id !== entry.id)];
+					indexes.set(name, [entry, ...(indexes.get(name) ?? []).filter((e) => e.id !== entry.id)]);
 				},
 				async list() {
-					return recent;
+					return indexes.get(name) ?? [];
 				},
 			}),
 		},
@@ -59,8 +60,9 @@ function fakeEnv() {
 		jobs,
 		files,
 		created,
-		recent: () => recent,
-		setRecent: (r: { id: string; createdAt: number }[]) => (recent = r),
+		indexes,
+		recent: (user = "") => indexes.get(indexName(user)) ?? [],
+		setRecent: (r: { id: string; createdAt: number }[], user = "") => indexes.set(indexName(user), r),
 		failIndex: () => (indexFails = true),
 	};
 }
@@ -268,5 +270,52 @@ describe("GET /api/jobs/:id e /api/files/:id", () => {
 	it("POST em /api/files/:id e 405", async () => {
 		const { env } = fakeEnv();
 		expect((await handleApi(new Request(`https://v/api/files/${ID}`, { method: "POST" }), env)).status).toBe(405);
+	});
+});
+
+describe("um usuario so ve os proprios jobs", () => {
+	const ANA = "ana@example.com";
+	const BIA = "bia@example.com";
+	const url = JSON.stringify({ url: "https://youtu.be/jNQXAC9IVRw" });
+
+	it("o job criado guarda o dono e entra so no indice dele", async () => {
+		const f = fakeEnv();
+		const res = await handleApi(post(url), f.env, undefined, ANA);
+		expect(res.status).toBe(202);
+		const { id } = (await res.json()) as { id: string };
+		expect(f.created[0]?.owner).toBe(ANA);
+		expect(f.recent(ANA).map((e) => e.id)).toEqual([id]);
+		expect(f.recent(BIA)).toEqual([]);
+		// O dono nao vai para a resposta publica.
+		const own = (await (await handleApi(new Request(`https://v/api/jobs/${id}`), f.env, undefined, ANA)).json()) as Record<string, unknown>;
+		expect(own.owner).toBeUndefined();
+	});
+
+	it("lista, job e arquivo de outra pessoa nao aparecem (404 e lista vazia)", async () => {
+		const f = fakeEnv();
+		const res = await handleApi(post(url), f.env, undefined, ANA);
+		const { id } = (await res.json()) as { id: string };
+		f.jobs.set(id, { ...f.jobs.get(id)!, status: "done", bytes: 4 });
+		f.files.set(`files/${id}`, { body: "abcd", disposition: "attachment" });
+
+		const list = (await (await handleApi(new Request("https://v/api/jobs"), f.env, undefined, BIA)).json()) as { jobs: unknown[] };
+		expect(list.jobs).toEqual([]);
+		expect((await handleApi(new Request(`https://v/api/jobs/${id}`), f.env, undefined, BIA)).status).toBe(404);
+		expect((await handleApi(new Request(`https://v/api/files/${id}`), f.env, undefined, BIA)).status).toBe(404);
+
+		// Mesmo com o id no indice de outra pessoa (defesa alem do indice), o job dela nao sai na lista.
+		f.setRecent([{ id, createdAt: 1 }], BIA);
+		const leaked = (await (await handleApi(new Request("https://v/api/jobs"), f.env, undefined, BIA)).json()) as { jobs: unknown[] };
+		expect(leaked.jobs).toEqual([]);
+
+		expect((await handleApi(new Request(`https://v/api/files/${id}`), f.env, undefined, ANA)).status).toBe(200);
+		const mine = (await (await handleApi(new Request("https://v/api/jobs"), f.env, undefined, ANA)).json()) as { jobs: { id: string }[] };
+		expect(mine.jobs.map((j) => j.id)).toEqual([id]);
+	});
+
+	it("job sem dono (anterior a separacao) continua acessivel pelo id", async () => {
+		const f = fakeEnv();
+		f.jobs.set(ID, { id: ID, platform: "x", videoId: "1", url: "https://x.com/a/status/1", status: "running", attempts: 1, createdAt: 1, updatedAt: 2 });
+		expect((await handleApi(new Request(`https://v/api/jobs/${ID}`), f.env, undefined, BIA)).status).toBe(200);
 	});
 });

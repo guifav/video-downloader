@@ -18,7 +18,15 @@ export interface IndexStub {
 	list(): Promise<RecentEntry[]>;
 }
 
-export const INDEX_NAME = "recent";
+/** Lista de recentes de cada usuario: um indice por email do Access. */
+export function indexName(user: string): string {
+	return `recent:${user}`;
+}
+
+/** Job de outra pessoa nao existe para este usuario. Job sem dono (anterior a separacao) fica visivel. */
+function visibleTo(job: JobRecord, user: string): boolean {
+	return job.owner === undefined || job.owner === user;
+}
 
 export interface ApiEnv {
 	JOBS: { getByName(name: string): JobStub };
@@ -33,7 +41,7 @@ function json(body: unknown, status = 200): Response {
 	});
 }
 
-async function createJob(request: Request, env: ApiEnv, outbound: Outbound): Promise<Response> {
+async function createJob(request: Request, env: ApiEnv, outbound: Outbound, user: string): Promise<Response> {
 	const raw = await readLimitedText(request, MAX_BODY_BYTES);
 	if (!raw.ok) return json({ error: raw.error }, raw.status);
 	let body: unknown;
@@ -55,10 +63,11 @@ async function createJob(request: Request, env: ApiEnv, outbound: Outbound): Pro
 		attempts: 0,
 		createdAt: now,
 		updatedAt: now,
+		owner: user,
 	};
 	const stored = await env.JOBS.getByName(job.id).create(job);
 	try {
-		await env.JOB_INDEX.getByName(INDEX_NAME).add({ id: stored.id, createdAt: stored.createdAt });
+		await env.JOB_INDEX.getByName(indexName(user)).add({ id: stored.id, createdAt: stored.createdAt });
 	} catch (error) {
 		// O job ja existe e roda; so nao aparece na lista apos recarregar. Nao vale falhar o envio.
 		console.warn("falha ao indexar job:", error instanceof Error ? error.message : error);
@@ -66,31 +75,31 @@ async function createJob(request: Request, env: ApiEnv, outbound: Outbound): Pro
 	return json(toPublicJob(stored, false, ""), 202);
 }
 
-async function publicJob(id: string, env: ApiEnv) {
+async function publicJob(id: string, env: ApiEnv, user: string) {
 	const job = await env.JOBS.getByName(id).get();
-	if (!job) return null;
+	if (!job || !visibleTo(job, user)) return null;
 	const exists = job.status === "done" ? (await env.FILES.head(fileKey(id))) !== null : false;
 	return toPublicJob(job, exists, "");
 }
 
-async function listJobs(env: ApiEnv): Promise<Response> {
-	const entries = await env.JOB_INDEX.getByName(INDEX_NAME).list();
-	const jobs = await Promise.all(entries.map((e) => publicJob(e.id, env).catch(() => null)));
+async function listJobs(env: ApiEnv, user: string): Promise<Response> {
+	const entries = await env.JOB_INDEX.getByName(indexName(user)).list();
+	const jobs = await Promise.all(entries.map((e) => publicJob(e.id, env, user).catch(() => null)));
 	return json({ jobs: jobs.filter((j) => j !== null) });
 }
 
-async function getJob(id: string, env: ApiEnv): Promise<Response> {
+async function getJob(id: string, env: ApiEnv, user: string): Promise<Response> {
 	const job = await env.JOBS.getByName(id).get();
-	if (!job) return json({ error: "Job nao encontrado ou expirado." }, 404);
+	if (!job || !visibleTo(job, user)) return json({ error: "Job nao encontrado ou expirado." }, 404);
 	const exists = job.status === "done" ? (await env.FILES.head(fileKey(id))) !== null : false;
 	return json(toPublicJob(job, exists, ""));
 }
 
-async function getFile(id: string, env: ApiEnv): Promise<Response> {
+async function getFile(id: string, env: ApiEnv, user: string): Promise<Response> {
 	// So serve o arquivo de um job done que ainda existe: depois da limpeza (estado apagado), um
 	// objeto que o lifecycle do bucket ainda nao removeu nao sai por esta rota (A4).
 	const job = await env.JOBS.getByName(id).get();
-	if (job?.status !== "done") return json({ error: "Arquivo nao encontrado ou expirado." }, 404);
+	if (job?.status !== "done" || !visibleTo(job, user)) return json({ error: "Arquivo nao encontrado ou expirado." }, 404);
 	const object = await env.FILES.get(fileKey(id));
 	if (!object) return json({ error: "Arquivo nao encontrado ou expirado." }, 404);
 	const headers = new Headers();
@@ -104,13 +113,14 @@ async function getFile(id: string, env: ApiEnv): Promise<Response> {
 // (src/share.ts). A outra, fixa, e a busca das chaves do Access (src/access.ts).
 const defaultOutbound: Outbound = (url, init) => fetch(url, init);
 
-export async function handleApi(request: Request, env: ApiEnv, outbound: Outbound = defaultOutbound): Promise<Response> {
+/** `user`: email verificado pelo Access (src/gateway.ts); cada usuario so ve os proprios jobs. */
+export async function handleApi(request: Request, env: ApiEnv, outbound: Outbound = defaultOutbound, user = ""): Promise<Response> {
 	const { pathname } = new URL(request.url);
 
 	if (pathname === "/api/jobs") {
-		if (request.method === "GET") return listJobs(env);
+		if (request.method === "GET") return listJobs(env, user);
 		if (request.method !== "POST") return json({ error: "Metodo nao permitido." }, 405);
-		return createJob(request, env, outbound);
+		return createJob(request, env, outbound, user);
 	}
 
 	const route = pathname.match(/^\/api\/(jobs|files)\/([^/]+)$/);
@@ -118,7 +128,7 @@ export async function handleApi(request: Request, env: ApiEnv, outbound: Outboun
 		if (request.method !== "GET") return json({ error: "Metodo nao permitido." }, 405);
 		const [, kind, id] = route;
 		if (!JOB_ID.test(id)) return json({ error: "ID invalido." }, 400);
-		return kind === "jobs" ? getJob(id, env) : getFile(id, env);
+		return kind === "jobs" ? getJob(id, env, user) : getFile(id, env, user);
 	}
 
 	return json({ error: "Nao encontrado." }, 404);

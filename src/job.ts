@@ -26,6 +26,11 @@ export interface JobRecord {
 	height?: number;
 	/** "<rodada>/<caso>" do smoke semanal (src/smoke.ts); ausente em jobs do usuario. */
 	smoke?: string;
+	/**
+	 * Email (Access) de quem criou o job: so essa pessoa ve o job, a lista e o arquivo. Ausente em
+	 * jobs do smoke e nos criados antes da separacao por usuario.
+	 */
+	owner?: string;
 }
 
 export const JOB_ID = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/;
