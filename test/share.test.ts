@@ -195,4 +195,38 @@ describe("resolveVideoUrl", () => {
 		},
 		30_000,
 	);
+
+	it("link curto do TikTok (vt, vm e /t/) segue o 301 ate o video canonico", async () => {
+		const target = "https://www.tiktok.com/@avery_arnett2/video/7682913384781696269?_r=1&_t=ZS-9ANqD14PtVU";
+		for (const [input, first] of [
+			["https://vt.tiktok.com/ZSbpfF4Dp/", "https://vt.tiktok.com/ZSbpfF4Dp/"],
+			["vm.tiktok.com/ZSbpfF4Dp?x=1", "https://vm.tiktok.com/ZSbpfF4Dp/"],
+			["https://tiktok.com/t/ZSbpfF4Dp", "https://www.tiktok.com/t/ZSbpfF4Dp/"],
+		]) {
+			const { fn, calls } = outbound({ [first]: { status: 301, location: target } });
+			const r = await resolveVideoUrl(input, fn);
+			expect(r).toMatchObject({
+				ok: true,
+				platform: "tiktok",
+				videoId: "7682913384781696269",
+				canonicalUrl: "https://www.tiktok.com/@avery_arnett2/video/7682913384781696269",
+			});
+			expect(calls.map((c) => c.url)).toEqual([first]);
+			expect(calls[0].init).toMatchObject({ redirect: "manual" });
+		}
+	});
+
+	it("link curto do TikTok que nao leva a video (expirado, produto, outra plataforma) e 400 sem job", async () => {
+		for (const location of [
+			"https://www.tiktok.com/?_r=1",
+			"https://www.tiktok.com/view/product/1737639444571063434",
+			"https://www.facebook.com/reel/1195289147628387",
+		]) {
+			const { fn } = outbound({ "https://vt.tiktok.com/ZSbpfF4Dp/": { status: 302, location } });
+			expect(await resolveVideoUrl("https://vt.tiktok.com/ZSbpfF4Dp/", fn)).toMatchObject({ ok: false, status: 400 });
+		}
+		const { fn, calls } = outbound({});
+		expect(await resolveVideoUrl("https://vt.tiktok.com/a/b/", fn)).toMatchObject({ ok: false, status: 400, error: "Link curto do TikTok invalido." });
+		expect(calls).toHaveLength(0);
+	});
 });

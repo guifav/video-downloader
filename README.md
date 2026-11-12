@@ -47,6 +47,7 @@ Most "download this video" websites are slow, full of ads, and send your links t
 | X (Twitter) | posts with a video |
 | Instagram | posts and reels (first video of a carousel) |
 | Facebook | videos, reels, `facebook.com/share/v/…` and `/share/r/…` links |
+| TikTok | videos, including the app's short links (`vm.tiktok.com/…`, `vt.tiktok.com/…`, `tiktok.com/t/…`); not photo posts or lives |
 
 Playlists, channels, profiles and stories are out of scope on purpose. This tool handles single videos, and handles them well.
 
@@ -58,7 +59,7 @@ Playlists, channels, profiles and stories are out of scope on purpose. This tool
 
 | Piece | Role | Code |
 |---|---|---|
-| **Worker** | API and static UI. Verifies the Access JWT, allow-lists URLs and resolves Facebook share links. | `src/index.ts`, `src/api.ts`, `src/gateway.ts`, `src/access.ts`, `src/urls.ts`, `src/share.ts` |
+| **Worker** | API and static UI. Verifies the Access JWT, allow-lists URLs and resolves Facebook and TikTok share links. | `src/index.ts`, `src/api.ts`, `src/gateway.ts`, `src/access.ts`, `src/urls.ts`, `src/share.ts` |
 | **Job Durable Object** | One per job. Owns the state, drives retries with alarms, writes the file to R2 and cleans up. | `src/container.ts` (adapter), `src/engine.ts` (logic) |
 | **Container** | Python service with yt-dlp, ffmpeg and Deno. Downloads the video, converts it to H.264 when needed and streams the MP4 back. Blocks connections to private addresses. | `container/app.py`, `Dockerfile` |
 | **Job list** | One small Durable Object per user (keyed by the Access email) holding the last 25 hours of jobs, so the list survives reloads and works across devices. Each user only sees, and can only download, their own jobs. | `src/job-index.ts`, `src/recent.ts` |
@@ -149,7 +150,7 @@ docker run --rm -e PYTHONDONTWRITEBYTECODE=1 -v "$PWD/container:/t:ro" -w /t vid
 │   ├── index.ts             entry point: fetch + scheduled handlers
 │   ├── api.ts, gateway.ts   routes and the Access gate
 │   ├── engine.ts            job state machine, retries, R2 writes, cleanup
-│   ├── urls.ts, share.ts    URL allow-list and Facebook share resolver
+│   ├── urls.ts, share.ts    URL allow-list and Facebook/TikTok share resolver
 │   └── smoke.ts             weekly smoke test
 ├── container/app.py         yt-dlp + ffmpeg service (Python)
 ├── test/                    vitest suites, run inside the Workers runtime
@@ -170,7 +171,7 @@ You pay the monthly base fee of the Workers Paid plan. On top of that, each down
 <details>
 <summary><b>Do I need cookies or a logged-in account?</b></summary>
 
-Usually not. When this was written, public videos from all four platforms downloaded fine from Cloudflare's network. If a platform starts asking for a login, you can add cookies as Worker secrets. Always take them from a <b>throwaway account</b>, never your personal one. See <a href="docs/DEPLOY.md">DEPLOY.md</a>.
+Usually not. When this was written, public videos from all supported platforms downloaded fine from Cloudflare's network. If a platform starts asking for a login, you can add cookies as Worker secrets. Always take them from a <b>throwaway account</b>, never your personal one. See <a href="docs/DEPLOY.md">DEPLOY.md</a>.
 </details>
 
 <details>
@@ -208,7 +209,7 @@ The maintainers do not host, store or distribute any content.
 
 Built on [yt-dlp](https://github.com/yt-dlp/yt-dlp), [FFmpeg](https://ffmpeg.org/), [Deno](https://deno.com/) and [Cloudflare Workers](https://developers.cloudflare.com/workers/).
 
-Platform logos come from [Simple Icons](https://simpleicons.org/) (CC0). YouTube, X, Instagram and Facebook are trademarks of their respective owners; this project is not affiliated with or endorsed by them.
+Platform logos come from [Simple Icons](https://simpleicons.org/) (CC0). YouTube, X, Instagram, Facebook and TikTok are trademarks of their respective owners; this project is not affiliated with or endorsed by them.
 
 ## License
 

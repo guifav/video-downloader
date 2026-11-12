@@ -53,6 +53,8 @@ export const SMOKE_CASES: SmokeCase[] = [
 	},
 	{ name: "instagram-reel", url: "https://www.instagram.com/reel/CDUMkliABpa/", platform: "instagram", expect: "done" },
 	{ name: "facebook-share", url: "https://www.facebook.com/share/v/19giuAapf3/", platform: "facebook", expect: "done" },
+	// Link curto do app: exercita o resolvedor e o download do TikTok.
+	{ name: "tiktok-curto", url: "https://vt.tiktok.com/ZSbpfF4Dp/", platform: "tiktok", expect: "done" },
 	// ~10 min em VP9: exercita a conversao longa para H.264 em standard-4 dentro do prazo do job.
 	{
 		name: "facebook-conversao-longa",
@@ -224,7 +226,7 @@ export function reportEmail(report: SmokeReport, now: number): { subject: string
 		"",
 		...lines,
 		"",
-		"Casos e criterios: src/smoke.ts. Falha de YouTube/Instagram/Facebook costuma ser bloqueio ou mudanca",
+		"Casos e criterios: src/smoke.ts. Falha de YouTube/Instagram/Facebook/TikTok costuma ser bloqueio ou mudanca",
 		"de site: atualizar o yt-dlp (redeploy reconstroi a imagem) e, se preciso, ligar cookies (docs/operations.md).",
 	].join("\n");
 	return { subject: `[video-download] smoke ${status} ${trackingId(now)}`, text };

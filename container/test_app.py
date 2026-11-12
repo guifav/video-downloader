@@ -94,6 +94,11 @@ class ValidateRequestTest(unittest.TestCase):
             with self.subTest(url=url):
                 self.assertEqual(app.validate_request({"url": url, "platform": "facebook"})[1], "facebook")
 
+    def test_accepts_tiktok_canonical_urls(self):
+        for url in ("https://www.tiktok.com/@avery_arnett2/video/7682913384781696269", "https://www.tiktok.com/@/video/7667617140471598356"):
+            with self.subTest(url=url):
+                self.assertEqual(app.validate_request({"url": url, "platform": "tiktok"})[1], "tiktok")
+
     def test_rejects_facebook_off_canonical(self):
         cases = [
             {"url": "https://www.facebook.com/reel/1", "platform": "instagram"},
@@ -131,6 +136,10 @@ class ValidateRequestTest(unittest.TestCase):
             {"url": "https://169.254.169.254/", "platform": "x"},
             {"url": 123, "platform": "x"},
             {"url": "https://x.com/a/status/1", "platform": "tiktok"},
+            {"url": "https://vm.tiktok.com/ZSbpfF4Dp/", "platform": "tiktok"},
+            {"url": "https://tiktok.com/@a/video/7682913384781696269", "platform": "tiktok"},
+            {"url": "https://www.tiktok.com/@a/video/7682913384781696269", "platform": "x"},
+            {"url": "https://www.tiktok.com.evil.com/@a/video/1", "platform": "tiktok"},
             [],
         ]
         for case in cases:
@@ -250,6 +259,16 @@ class FormatOrientationTest(unittest.TestCase):
         formats = [opus, self.fmt("v1080", 1080, 1920, vcodec="vp9", ext="webm"),
                    self.fmt("v2160", 2160, 3840, vcodec="vp9", ext="webm")]
         self.assertEqual(self.pick(formats), "v1080+o")
+
+    def test_tiktok_h264_progressive_beats_higher_bitrate_h265(self):
+        """O TikTok chama o codec de "h264" (nao avc1) e oferece h265 (bytevc1) ao lado; sem
+        reconhecer "h264" o seletor caia no melhor geral e o job gastava uma conversao."""
+        formats = [
+            dict(self.fmt("bytevc1_720p", 720, 1280, vcodec="h265", acodec="aac"), tbr=3000),
+            dict(self.fmt("h264_720p", 720, 1280, vcodec="h264", acodec="aac"), tbr=1500),
+            dict(self.fmt("h264_540p", 576, 1024, vcodec="h264", acodec="aac"), tbr=900),
+        ]
+        self.assertEqual(self.pick(formats), "h264_720p")
 
     def test_landscape_unchanged(self):
         formats = [self.audio(), self.fmt("h1080", 1920, 1080), self.fmt("h2160", 3840, 2160)]
@@ -855,7 +874,7 @@ class SsrfTest(unittest.TestCase):
 
     def test_instagram_loads_only_its_video_extractor(self):
         """allowed_extractors usa fullmatch: nada de instagram:story/user/tag."""
-        expected = {"instagram": {"Instagram"}, "facebook": {"Facebook", "FacebookReel"}}
+        expected = {"instagram": {"Instagram"}, "facebook": {"Facebook", "FacebookReel"}, "tiktok": {"TikTok"}}
         for platform, names in expected.items():
             with self.subTest(platform=platform):
                 with yt_dlp.YoutubeDL({"quiet": True, "allowed_extractors": app.ALLOWED_EXTRACTORS[platform]}) as ydl:
@@ -918,7 +937,7 @@ class DownloadTest(unittest.TestCase):
         # I3: fragmento indisponivel nao pode virar arquivo parcial servido como sucesso
         self.assertIs(FakeYDL.last_opts.get("skip_unavailable_fragments"), False)
         self.assertEqual(FakeYDL.last_opts["merge_output_format"], "mp4")
-        self.assertTrue(FakeYDL.last_opts["format"].startswith("bv*[vcodec^=avc1]"))
+        self.assertTrue(FakeYDL.last_opts["format"].startswith("bv*[vcodec~='^(avc1|h264)']"))
 
     def test_playlist_result_uses_first_real_entry(self):
         FakeYDL.behavior = "playlist"

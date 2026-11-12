@@ -164,3 +164,33 @@ describe("parseVideoUrl: entradas hostis ou fora de escopo", () => {
 		}
 	});
 });
+
+describe("parseVideoUrl: TikTok", () => {
+	it.each([
+		["https://www.tiktok.com/@avery_arnett2/video/7682913384781696269", "https://www.tiktok.com/@avery_arnett2/video/7682913384781696269"],
+		["https://www.tiktok.com/@charlotte.shares/video/7573750062094847263?_r=1&_t=ZS-9ANqHlv6OCD", "https://www.tiktok.com/@charlotte.shares/video/7573750062094847263"],
+		["tiktok.com/@a_b-c/video/7682913384781696269/", "https://www.tiktok.com/@a_b-c/video/7682913384781696269"],
+		["https://m.tiktok.com/@x/video/7682913384781696269", "https://www.tiktok.com/@x/video/7682913384781696269"],
+		["https://www.tiktok.com/@/video/7667617140471598356?_r=1", "https://www.tiktok.com/@/video/7667617140471598356"],
+	])("aceita %s", (input, canonical) => {
+		const r = ok(input);
+		expect(r.platform).toBe("tiktok");
+		expect(r.canonicalUrl).toBe(canonical);
+		expect(r.videoId).toBe(canonical.split("/").pop());
+	});
+
+	it.each([
+		["https://www.tiktok.com/@avery_arnett2", /precisa apontar para um video/],
+		["https://www.tiktok.com/@avery_arnett2/photo/7682913384781696269", /Fotos/],
+		["https://www.tiktok.com/@avery_arnett2/live", /lives/],
+		["https://www.tiktok.com/music/som-7682913384781696269", /precisa apontar para um video/],
+		["https://www.tiktok.com/@a/video/abc", /precisa apontar para um video/],
+		["https://vm.tiktok.com/ZSbpfF4Dp/", /resolvido antes/],
+		["https://www.tiktok.com/t/ZTRC5xgJp/", /resolvido antes/],
+		["https://www.tiktok.com.evil.com/@a/video/7682913384781696269", /nao suportada/],
+	])("rejeita %s", (input, message) => {
+		const r = parseVideoUrl(input);
+		expect(r.ok).toBe(false);
+		if (!r.ok) expect(r.error).toMatch(message);
+	});
+});

@@ -44,7 +44,7 @@
 <body>
 <main>
 	<h1>Baixar vídeo</h1>
-	<p class="sub">YouTube, X, Instagram ou Facebook. Só vídeos avulsos, até 1080p. Os arquivos ficam disponíveis por 24 horas, também em outros aparelhos.</p>
+	<p class="sub">YouTube, X, Instagram, Facebook ou TikTok. Só vídeos avulsos, até 1080p. Os arquivos ficam disponíveis por 24 horas, também em outros aparelhos.</p>
 	<form id="form" autocomplete="off">
 		<input id="url" name="url" type="text" inputmode="url" placeholder="Cole o link do vídeo" autofocus required>
 		<button id="submit" type="submit">Baixar</button>
@@ -58,7 +58,7 @@ const POLL_MS = 2000;
 const MAX_POLL_BACKOFF_MS = 30000;
 const GIVE_UP_MS = 60 * 60 * 1000;
 const LABELS = { queued: "Na fila", running: "Baixando", done: "Pronto", failed: "Falhou", expired: "Expirado" };
-const PLATFORMS = { youtube: "YouTube", x: "X", instagram: "Instagram", facebook: "Facebook" };
+const PLATFORMS = { youtube: "YouTube", x: "X", instagram: "Instagram", facebook: "Facebook", tiktok: "TikTok" };
 const form = document.getElementById("form");
 const input = document.getElementById("url");
 const submit = document.getElementById("submit");

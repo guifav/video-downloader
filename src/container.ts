@@ -13,6 +13,7 @@ export interface AppEnv extends Env {
 	YT_COOKIES_B64?: string;
 	IG_COOKIES_B64?: string;
 	FB_COOKIES_B64?: string;
+	TT_COOKIES_B64?: string;
 }
 
 export class JobContainer extends DurableObject<AppEnv> {
@@ -30,7 +31,7 @@ export class JobContainer extends DurableObject<AppEnv> {
 				if (!container.running) {
 					const containerEnv: Record<string, string> = {};
 					// Cookies opcionais de conta descartavel, um secret por plataforma (container/app.py).
-					for (const name of ["YT_COOKIES_B64", "IG_COOKIES_B64", "FB_COOKIES_B64"] as const) {
+					for (const name of ["YT_COOKIES_B64", "IG_COOKIES_B64", "FB_COOKIES_B64", "TT_COOKIES_B64"] as const) {
 						const value = env[name];
 						if (value) containerEnv[name] = value;
 					}
