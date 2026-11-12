@@ -42,6 +42,8 @@ This step is required: the Worker refuses any request without a valid Access JWT
    Leave both empty to only log the report. To turn the smoke test off completely, remove `triggers.crons`.
 4. Regenerate the types: `npm run cf-typegen`.
 
+If you deploy from your own fork or clone and want to keep your values out of git, copy the file to `wrangler.local.jsonc` (already in `.gitignore`), edit that copy instead, and pass it to every wrangler command with `-c wrangler.local.jsonc`, for example `npx wrangler deploy -c wrangler.local.jsonc`.
+
 ## 5. Add cookies (optional)
 
 At the time of writing, public videos from YouTube, X, Instagram and Facebook downloaded fine from Cloudflare's network without cookies. If a platform starts blocking, add cookies as a base64-encoded Netscape cookies file. Always take them from a **throwaway account, never your personal one**.
