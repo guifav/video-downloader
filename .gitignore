@@ -202,3 +202,8 @@ dist
 __pycache__/
 *.pyc
 node_modules
+
+# Local deploy config and cookies: never commit
+wrangler.local.jsonc
+cookies*.txt
+*.cookies
