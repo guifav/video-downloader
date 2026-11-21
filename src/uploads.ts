@@ -13,9 +13,12 @@ import { JOB_ID } from "./job";
 export const PART_SIZE = 50 * 1024 * 1024;
 export const MAX_UPLOAD_BYTES = 20 * 1024 * 1024 * 1024;
 const MAX_JSON_BYTES = 64 * 1024;
+const MAX_ETAG = 1024;
+// Conclusao: uma entrada por parte, com a etag (opaca; 171 caracteres no R2 hoje) e o numero.
+const MAX_COMPLETE_BYTES = Math.ceil(MAX_UPLOAD_BYTES / PART_SIZE) * (MAX_ETAG + 64) + 1024;
 const REF = /^[A-Za-z0-9][A-Za-z0-9._-]{0,39}$/;
 const MIME = /^(video|audio)\/[a-z0-9.+-]{1,40}$/;
-const ETAG = /^[\x21-\x7e]{1,1024}$/; // opaca: o R2 local e o real usam formatos diferentes
+const ETAG = new RegExp(`^[\\x21-\\x7e]{1,${MAX_ETAG}}$`); // opaca: o R2 local e o real usam formatos diferentes
 const MAX_NAME = 120;
 
 export const uploadKey = (id: string) => `uploads/${id}`;
@@ -102,8 +105,11 @@ function expectedPartSize(p: Pending, n: number): number {
 	return n < p.parts ? PART_SIZE : p.size - PART_SIZE * (p.parts - 1);
 }
 
-async function readJson(request: Request): Promise<{ ok: true; body: Record<string, unknown> } | { ok: false; res: Response }> {
-	const raw = await readLimitedText(request, MAX_JSON_BYTES);
+async function readJson(
+	request: Request,
+	limit = MAX_JSON_BYTES,
+): Promise<{ ok: true; body: Record<string, unknown> } | { ok: false; res: Response }> {
+	const raw = await readLimitedText(request, limit);
 	if (!raw.ok) return { ok: false, res: json({ error: raw.error }, raw.status) };
 	try {
 		const body: unknown = JSON.parse(raw.text);
@@ -177,7 +183,7 @@ async function putPart(request: Request, env: UploadEnv, user: string, id: strin
 async function complete(request: Request, env: UploadEnv, user: string, id: string): Promise<Response> {
 	const pending = await loadPending(env, id, user);
 	if (!pending) return notFound();
-	const read = await readJson(request);
+	const read = await readJson(request, MAX_COMPLETE_BYTES);
 	if (!read.ok) return read.res;
 	const parts = read.body.parts;
 	if (

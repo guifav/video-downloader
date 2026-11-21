@@ -196,6 +196,16 @@ describe("uploads", () => {
 		expect(bad.status).toBe(400);
 	});
 
+	it("conclusao aceita o maior envio permitido (20 GB, etags longas como as do R2)", async () => {
+		const t = setup();
+		const c = await t.create(GUI, 20 * 1024 ** 3);
+		expect(c.body.parts).toBe(410);
+		const parts = Array.from({ length: c.body.parts }, (_, i) => ({ partNumber: i + 1, etag: "x".repeat(171) }));
+		const res = await t.call(GUI, "POST", `/api/uploads/${c.body.id}/complete`, JSON.stringify({ parts }));
+		// O falso recusa as etags (502); o que importa e nao ser 413 pelo tamanho do corpo.
+		expect(res.status).toBe(502);
+	});
+
 	it("valida tamanho, tipo e referencia na criacao", async () => {
 		const t = setup();
 		for (const extra of [{ type: "text/html" }, { type: "application/octet-stream" }, { ref: "../x" }, { ref: "a b" }]) {
