@@ -148,7 +148,26 @@ describe("verifyAccessJwt", async () => {
 
 	it("U1: token sem email e rejeitado", async () => {
 		const token = await sign(k1.privateKey, { ...goodPayload(), email: undefined }, { alg: "RS256", kid: "k1" });
-		expect(await verifyAccessJwt(token, config, fetcher, NOW)).toEqual({ ok: false, reason: "email nao autorizado" });
+		expect(await verifyAccessJwt(token, config, fetcher, NOW)).toEqual({ ok: false, reason: "token de servico nao autorizado" });
+	});
+
+	it("token de servico: so o Client ID configurado entra, como service:<nome>", async () => {
+		const svc = { ...config, serviceTokens: new Map([["abc.access", "studio"]]) };
+		const payload = (cn: unknown) => ({ ...goodPayload(), email: undefined, common_name: cn, sub: "" });
+		const ok = await sign(k1.privateKey, payload("abc.access"), { alg: "RS256", kid: "k1" });
+		expect(await verifyAccessJwt(ok, svc, fetcher, NOW)).toEqual({ ok: true, email: "service:studio" });
+		for (const cn of ["outro.access", "", 42, undefined]) {
+			const bad = await sign(k1.privateKey, payload(cn), { alg: "RS256", kid: "k1" });
+			expect(await verifyAccessJwt(bad, svc, fetcher, NOW)).toEqual({ ok: false, reason: "token de servico nao autorizado" });
+		}
+		// Sem a lista, nenhum token de servico entra.
+		expect(await verifyAccessJwt(ok, config, fetcher, NOW)).toEqual({ ok: false, reason: "token de servico nao autorizado" });
+	});
+
+	it("token de servico com assinatura de outra chave e rejeitado", async () => {
+		const svc = { ...config, serviceTokens: new Map([["abc.access", "studio"]]) };
+		const token = await sign(other.privateKey, { ...goodPayload(), email: undefined, common_name: "abc.access" }, { alg: "RS256", kid: "k1" });
+		expect(await verifyAccessJwt(token, svc, fetcher, NOW)).toEqual({ ok: false, reason: "assinatura invalida" });
 	});
 
 	it.each([
@@ -164,6 +183,11 @@ describe("accessConfigFromEnv", () => {
 	it("normaliza a lista de emails", () => {
 		expect(
 			accessConfigFromEnv({ ACCESS_TEAM_DOMAIN: " t ", ACCESS_AUD: "a", ACCESS_ALLOWED_EMAILS: " A@x.com, ,b@y.com" }),
-		).toEqual({ teamDomain: "t", audience: "a", allowedEmails: ["a@x.com", "b@y.com"] });
+		).toEqual({ teamDomain: "t", audience: "a", allowedEmails: ["a@x.com", "b@y.com"], serviceTokens: new Map() });
+	});
+
+	it("le os tokens de servico e ignora nomes fora do formato", () => {
+		const c = accessConfigFromEnv({ ACCESS_SERVICE_TOKENS: " id1.access=Studio , id2=bad name, =x, id3.access=ok-2" });
+		expect(c.serviceTokens).toEqual(new Map([["id1.access", "studio"], ["id3.access", "ok-2"]]));
 	});
 });

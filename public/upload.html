@@ -1,0 +1,204 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Enviar gravação</title>
+<meta name="robots" content="noindex, nofollow">
+<style>
+	:root {
+		color-scheme: light dark;
+		--bg: #ffffff; --fg: #0a0a0a; --muted: #737373; --border: #e5e5e5; --card: #fafafa;
+		--primary: #171717; --primary-fg: #fafafa; --danger: #dc2626; --ok: #16a34a;
+	}
+	@media (prefers-color-scheme: dark) {
+		:root { --bg: #0a0a0a; --fg: #fafafa; --muted: #a3a3a3; --border: #262626; --card: #141414;
+			--primary: #fafafa; --primary-fg: #171717; --danger: #f87171; --ok: #4ade80; }
+	}
+	* { box-sizing: border-box; }
+	body { margin: 0; background: var(--bg); color: var(--fg);
+		font: 15px/1.5 ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif; }
+	main { max-width: 640px; margin: 0 auto; padding: 48px 20px; }
+	nav { margin: 0 0 16px; font-size: 14px; }
+	nav a { color: var(--muted); }
+	h1 { font-size: 20px; font-weight: 600; margin: 0 0 4px; }
+	p.sub { margin: 0 0 24px; color: var(--muted); font-size: 14px; }
+	form { display: grid; gap: 8px; }
+	input { height: 40px; padding: 0 12px; border: 1px solid var(--border); border-radius: 8px;
+		background: var(--bg); color: var(--fg); font: inherit; }
+	input[type=file] { padding: 7px 12px; }
+	button, a.btn { height: 40px; padding: 0 16px; border: 0; border-radius: 8px; background: var(--primary);
+		color: var(--primary-fg); font: inherit; font-weight: 500; cursor: pointer; text-decoration: none;
+		display: inline-flex; align-items: center; justify-content: center; white-space: nowrap; }
+	button:disabled { opacity: .5; cursor: default; }
+	progress { width: 100%; height: 8px; }
+	#status { font-size: 14px; min-height: 21px; margin: 8px 0 0; color: var(--muted); }
+	#status.error { color: var(--danger); }
+	#status.ok { color: var(--ok); }
+	ul { list-style: none; padding: 0; margin: 24px 0 0; display: grid; gap: 8px; }
+	li { border: 1px solid var(--border); background: var(--card); border-radius: 10px; padding: 12px 14px;
+		display: grid; grid-template-columns: 1fr auto; gap: 4px 12px; align-items: center; }
+	.title { font-weight: 500; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+	.meta { grid-column: 1; color: var(--muted); font-size: 13px; }
+	.action { grid-row: 1 / span 2; grid-column: 2; }
+</style>
+</head>
+<body>
+<main>
+	<nav><a href="/">Baixar vídeo</a></nav>
+	<h1>Enviar gravação</h1>
+	<p class="sub">Áudio ou vídeo, de qualquer tamanho até 20 GB. Só você vê os seus envios. Os arquivos ficam disponíveis por 24 horas.</p>
+	<form id="form" autocomplete="off">
+		<input id="file" type="file" accept="audio/*,video/*" required>
+		<input id="ref" type="text" placeholder="Referência (opcional), ex.: GUI-50" maxlength="40" autocapitalize="characters">
+		<button id="submit" type="submit">Enviar</button>
+		<progress id="progress" max="1" value="0" hidden></progress>
+	</form>
+	<p id="status" role="status"></p>
+	<ul id="uploads" aria-live="polite"></ul>
+</main>
+<script>
+"use strict";
+const MAX_TRIES = 5;
+const form = document.getElementById("form");
+const fileInput = document.getElementById("file");
+const refInput = document.getElementById("ref");
+const submit = document.getElementById("submit");
+const progress = document.getElementById("progress");
+const statusEl = document.getElementById("status");
+const list = document.getElementById("uploads");
+
+function setStatus(text, kind) {
+	statusEl.textContent = text;
+	statusEl.className = kind || "";
+}
+
+function formatBytes(n) {
+	const units = ["B", "KB", "MB", "GB"];
+	let i = 0;
+	while (n >= 1024 && i < units.length - 1) { n /= 1024; i++; }
+	return `${n.toFixed(i === 0 ? 0 : 1).replace(".", ",")} ${units[i]}`;
+}
+
+async function api(path, options) {
+	const res = await fetch(path, { ...options, credentials: "same-origin", redirect: "manual" });
+	if (res.type === "opaqueredirect" || res.status === 0) throw new Error("Sessão expirada. Recarregue a página.");
+	const body = await res.json().catch(() => ({}));
+	if (!res.ok) throw Object.assign(new Error(body.error || `Erro ${res.status}`), { status: res.status });
+	return body;
+}
+
+// XHR na parte para ter progresso de envio (fetch nao informa).
+function sendPart(url, blob, onProgress) {
+	return new Promise((resolve, reject) => {
+		const xhr = new XMLHttpRequest();
+		xhr.open("PUT", url);
+		xhr.upload.onprogress = (e) => onProgress(e.loaded);
+		xhr.onload = () => {
+			let body = {};
+			try { body = JSON.parse(xhr.responseText); } catch {}
+			if (xhr.status >= 200 && xhr.status < 300) resolve(body);
+			else reject(Object.assign(new Error(body.error || `Erro ${xhr.status}`), { status: xhr.status }));
+		};
+		xhr.onerror = () => reject(Object.assign(new Error("Falha de rede"), { status: 0 }));
+		xhr.send(blob);
+	});
+}
+
+const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+
+async function upload(file, ref) {
+	const created = await api("/api/uploads", {
+		method: "POST",
+		headers: { "content-type": "application/json" },
+		body: JSON.stringify({ name: file.name, size: file.size, type: file.type || guessType(file.name), ref }),
+	});
+	const parts = [];
+	let done = 0;
+	for (let n = 1; n <= created.parts; n++) {
+		const blob = file.slice((n - 1) * created.partSize, Math.min(n * created.partSize, file.size));
+		for (let attempt = 1; ; attempt++) {
+			try {
+				const part = await sendPart(`/api/uploads/${created.id}/parts/${n}`, blob, (loaded) => {
+					progress.value = (done + loaded) / file.size;
+				});
+				parts.push({ partNumber: part.partNumber, etag: part.etag });
+				break;
+			} catch (error) {
+				// 4xx e definitivo (sessao, parte invalida); rede e 5xx tentam de novo.
+				if ((error.status >= 400 && error.status < 500) || attempt >= MAX_TRIES) throw error;
+				setStatus(`Parte ${n} falhou; tentando de novo (${attempt}/${MAX_TRIES - 1})...`);
+				await sleep(2000 * attempt);
+			}
+		}
+		done += blob.size;
+		setStatus(`Enviando: ${formatBytes(done)} de ${formatBytes(file.size)}`);
+	}
+	return api(`/api/uploads/${created.id}/complete`, {
+		method: "POST",
+		headers: { "content-type": "application/json" },
+		body: JSON.stringify({ parts }),
+	});
+}
+
+function guessType(name) {
+	const ext = (name.split(".").pop() || "").toLowerCase();
+	return { m4a: "audio/mp4", mp3: "audio/mpeg", wav: "audio/wav", aac: "audio/aac", mp4: "video/mp4", mov: "video/quicktime", m4v: "video/x-m4v", webm: "video/webm" }[ext] || "";
+}
+
+function render(uploads) {
+	list.replaceChildren();
+	for (const u of uploads) {
+		const li = document.createElement("li");
+		const title = document.createElement("span");
+		title.className = "title";
+		title.textContent = u.name;
+		const meta = document.createElement("span");
+		meta.className = "meta";
+		const when = new Date(u.createdAt).toLocaleString("pt-BR", { dateStyle: "short", timeStyle: "short" });
+		meta.textContent = [u.ref, formatBytes(u.size), when].filter(Boolean).join(" · ");
+		const link = document.createElement("a");
+		link.className = "btn action";
+		link.href = `/api/uploads/${u.id}/file`;
+		link.textContent = "Baixar";
+		li.append(title, meta, link);
+		list.append(li);
+	}
+}
+
+async function refresh() {
+	try {
+		render((await api("/api/uploads")).uploads);
+	} catch (error) {
+		if (error.status === 403) {
+			setStatus("O envio de arquivos não está habilitado para esta conta.", "error");
+			submit.disabled = true;
+		}
+	}
+}
+
+form.addEventListener("submit", async (e) => {
+	e.preventDefault();
+	const file = fileInput.files && fileInput.files[0];
+	if (!file) return;
+	submit.disabled = true;
+	progress.hidden = false;
+	progress.value = 0;
+	setStatus("Começando o envio...");
+	try {
+		const done = await upload(file, refInput.value.trim());
+		setStatus(`Enviado: ${done.name}${done.ref ? ` (${done.ref})` : ""}.`, "ok");
+		form.reset();
+		await refresh();
+	} catch (error) {
+		setStatus(error.message || "Falha no envio.", "error");
+	} finally {
+		submit.disabled = false;
+		progress.hidden = true;
+	}
+});
+
+refresh();
+</script>
+</body>
+</html>

@@ -63,6 +63,12 @@ npm run deploy
 
 Open your hostname, log in through Access and paste a link.
 
+## 7. Optional: scripts and uploads
+
+**Service tokens.** To call the API from a script, create an Access service token, add a policy with the **Service Auth** action for it to the application, and list its Client ID in `vars.ACCESS_SERVICE_TOKENS` as `<client id>=<name>`. The script sends the `CF-Access-Client-Id` and `CF-Access-Client-Secret` headers. Each token is its own user (`service:<name>`): it creates jobs and sees only its own list.
+
+**Uploads.** `vars.UPLOAD_EMAILS` turns on the "Enviar gravação" page (`/upload.html`) for those emails: audio or video files up to 20 GB, sent from the browser in 50 MB parts (Cloudflare caps a single request body at 100 MB), stored in the same bucket and deleted after 24 hours like everything else. Each file belongs to the email that sent it and only that email sees it. An optional reference (for example a ticket id) is saved with the file. To let a script read the uploads of one person, add `<service name>=<email>` to `vars.UPLOAD_SHARES`; the token can then list (`GET /api/uploads?ref=...`) and download (`GET /api/uploads/<id>/file`) only that person's uploads, and never upload.
+
 ## Costs and limits
 
 - Each download runs one `standard-4` container for the length of the job. That is usually well under a minute; long Facebook videos that need conversion take a few minutes.

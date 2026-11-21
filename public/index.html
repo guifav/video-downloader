@@ -43,6 +43,7 @@
 </head>
 <body>
 <main>
+	<nav style="margin:0 0 16px;font-size:14px"><a id="upload-link" href="/upload.html" style="color:var(--muted)" hidden>Enviar gravação</a></nav>
 	<h1>Baixar vídeo</h1>
 	<p class="sub">YouTube, X, Instagram, Facebook ou TikTok. Só vídeos avulsos, até 1080p. Os arquivos ficam disponíveis por 24 horas, também em outros aparelhos.</p>
 	<form id="form" autocomplete="off">
@@ -52,6 +53,7 @@
 	<p id="form-error" role="alert"></p>
 	<ul id="jobs" aria-live="polite"></ul>
 </main>
+<script src="/nav.js" defer></script>
 <script>
 "use strict";
 const POLL_MS = 2000;

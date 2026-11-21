@@ -9,6 +9,7 @@ export interface GatewayEnv extends ApiEnv {
 	ACCESS_TEAM_DOMAIN?: string;
 	ACCESS_AUD?: string;
 	ACCESS_ALLOWED_EMAILS?: string;
+	ACCESS_SERVICE_TOKENS?: string;
 }
 
 export type Verifier = (token: string | null, env: GatewayEnv) => Promise<AccessResult>;
