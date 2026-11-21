@@ -38,6 +38,7 @@ Most "download this video" websites are slow, full of ads, and send your links t
 | **Leaves nothing behind** | Files and job state are deleted after 24 hours, with an R2 lifecycle rule as a safety net. |
 | **Bounded cost** | One container per job, at most 3 attempts of 14 minutes each. Live streams are refused before anything is downloaded. |
 | **Self-checking** | An optional weekly cron downloads one known video per platform and emails you the result. |
+| **Scripts and uploads** | Optional: Access service tokens for scripts, and an upload page for your own recordings (up to 20 GB, private to you, shareable with one script). See [docs/DEPLOY.md](docs/DEPLOY.md#7-optional-scripts-and-uploads). |
 
 **Supported links:**
 

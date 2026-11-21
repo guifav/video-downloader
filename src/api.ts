@@ -2,6 +2,7 @@ import { fileKey, JOB_ID, toPublicJob, type JobRecord } from "./job";
 import { readLimitedText } from "./http";
 import type { RecentEntry } from "./recent";
 import { resolveVideoUrl, type Outbound } from "./share";
+import { handleUploads, uploadConfigFromEnv, type UploadEnv } from "./uploads";
 // API do baixador. Autenticacao fica na borda (Cloudflare Access no dominio do Worker,
 // item 3 do epic #1); o Worker nao tem rota publica fora dela (workers_dev desligado).
 
@@ -32,6 +33,9 @@ export interface ApiEnv {
 	JOBS: { getByName(name: string): JobStub };
 	JOB_INDEX: { getByName(name: string): IndexStub };
 	FILES: { head(key: string): Promise<unknown | null>; get(key: string): Promise<R2ObjectBody | null> };
+	/** Envio de arquivos (src/uploads.ts): quem envia e quem le os envios de quem. */
+	UPLOAD_EMAILS?: string;
+	UPLOAD_SHARES?: string;
 }
 
 function json(body: unknown, status = 200): Response {
@@ -116,6 +120,15 @@ const defaultOutbound: Outbound = (url, init) => fetch(url, init);
 /** `user`: email verificado pelo Access (src/gateway.ts); cada usuario so ve os proprios jobs. */
 export async function handleApi(request: Request, env: ApiEnv, outbound: Outbound = defaultOutbound, user = ""): Promise<Response> {
 	const { pathname } = new URL(request.url);
+
+	if (pathname === "/api/me") {
+		if (request.method !== "GET") return json({ error: "Metodo nao permitido." }, 405);
+		return json({ canUpload: uploadConfigFromEnv(env).uploaders.includes(user) });
+	}
+
+	// O binding real do R2 tem a API inteira; o tipo de ApiEnv so descreve o que os jobs usam.
+	const uploads = await handleUploads(request, env as unknown as UploadEnv, user);
+	if (uploads) return uploads;
 
 	if (pathname === "/api/jobs") {
 		if (request.method === "GET") return listJobs(env, user);

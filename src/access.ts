@@ -6,6 +6,11 @@ export interface AccessConfig {
 	teamDomain: string; // ex.: <time>.cloudflareaccess.com
 	audience: string; // AUD tag do app do Access
 	allowedEmails: string[]; // obrigatoria: lista vazia falha fechado (U1)
+	/**
+	 * Credenciais de servico do Access aceitas, por Client ID (o `common_name` do JWT) -> nome. A
+	 * identidade vira "service:<nome>". Opcional; vazio = so pessoas.
+	 */
+	serviceTokens?: Map<string, string>;
 }
 
 // transient: a negacao vem de indisponibilidade (chaves do Access fora), nao da identidade.
@@ -121,12 +126,40 @@ export async function verifyAccessJwt(
 	if (typeof payload.nbf === "number" && payload.nbf - CLOCK_SKEW_S > nowSeconds) return { ok: false, reason: "token ainda nao valido" };
 
 	const email = typeof payload.email === "string" ? payload.email.toLowerCase() : "";
-	if (email === "" || !config.allowedEmails.includes(email)) return { ok: false, reason: "email nao autorizado" };
+	if (email === "") {
+		// Token de servico: sem email, com o Client ID em common_name. So os configurados entram.
+		const cn = typeof payload.common_name === "string" ? payload.common_name : "";
+		const service = cn === "" ? undefined : config.serviceTokens?.get(cn);
+		if (service === undefined) return { ok: false, reason: "token de servico nao autorizado" };
+		return { ok: true, email: `service:${service}` };
+	}
+	if (!config.allowedEmails.includes(email)) return { ok: false, reason: "email nao autorizado" };
 	return { ok: true, email };
 }
 
-export function accessConfigFromEnv(env: { ACCESS_TEAM_DOMAIN?: string; ACCESS_AUD?: string; ACCESS_ALLOWED_EMAILS?: string }): AccessConfig {
+const SERVICE_NAME = /^[a-z0-9][a-z0-9-]{0,39}$/;
+
+/** "clientId=nome,..." -> Map. Pares com nome fora do formato sao ignorados. */
+export function parseServiceTokens(raw: string | undefined): Map<string, string> {
+	const out = new Map<string, string>();
+	for (const pair of (raw ?? "").split(",")) {
+		const i = pair.lastIndexOf("=");
+		if (i <= 0) continue;
+		const id = pair.slice(0, i).trim();
+		const name = pair.slice(i + 1).trim().toLowerCase();
+		if (id !== "" && SERVICE_NAME.test(name)) out.set(id, name);
+	}
+	return out;
+}
+
+export function accessConfigFromEnv(env: {
+	ACCESS_TEAM_DOMAIN?: string;
+	ACCESS_AUD?: string;
+	ACCESS_ALLOWED_EMAILS?: string;
+	ACCESS_SERVICE_TOKENS?: string;
+}): AccessConfig {
 	return {
+		serviceTokens: parseServiceTokens(env.ACCESS_SERVICE_TOKENS),
 		teamDomain: (env.ACCESS_TEAM_DOMAIN ?? "").trim(),
 		audience: (env.ACCESS_AUD ?? "").trim(),
 		allowedEmails: (env.ACCESS_ALLOWED_EMAILS ?? "")

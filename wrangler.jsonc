@@ -21,6 +21,15 @@
 		"ACCESS_TEAM_DOMAIN": "your-team.cloudflareaccess.com",
 		"ACCESS_AUD": "replace-with-your-access-application-aud-tag",
 		"ACCESS_ALLOWED_EMAILS": "you@example.com",
+		// Optional Access service tokens, for scripts: "<client id>=<name>" pairs, comma separated. The
+		// Access application also needs a Service Auth policy for each token. Each token is its own
+		// user ("service:<name>"), with its own job list.
+		"ACCESS_SERVICE_TOKENS": "",
+		// Optional uploads of your own recordings (audio or video, up to 20 GB, sent in 50 MB parts):
+		// emails allowed to upload (each one only sees their own files), and "<service name>=<email>"
+		// pairs that let a service token read the uploads of that one email. Empty = feature off.
+		"UPLOAD_EMAILS": "",
+		"UPLOAD_SHARES": "",
 		// Optional weekly smoke report by email (needs Email Routing on the sender's zone and a
 		// verified destination). Leave empty to only log the report.
 		"ALERT_EMAIL_FROM": "",
